@@ -1,7 +1,11 @@
 {
-  "preset": "jquery",
+  "preset": "google",
   "requireCamelCaseOrUpperCaseIdentifiers": "ignoreProperties",
   "validateQuoteMarks": "'",
+  "disallowSpacesInsideArrayBrackets": null,
+  "requireCurlyBraces": null,
+  "requireSpaceBeforeBlockStatements": null,
+  "requireSpaceAfterKeywords": null,
   "maximumLineLength": {
     "value": 1000
   }

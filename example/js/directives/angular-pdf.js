@@ -1,4 +1,4 @@
-/*! Angular-PDF Version: 0.4.0 | (C) Sayanee Basu 2014, released under an MIT license */
+/*! Angular-PDF Version: 0.5.0 | (C) Sayanee Basu 2014, Matt Edlefsen 2015 released under an MIT license */
 (function() {
 
   'use strict';
@@ -6,131 +6,115 @@
   angular.module('pdf', []).directive('ngPdf', [ '$window', function($window) {
     return {
       restrict: 'E',
-      templateUrl: function(element, attr) {
-        return attr.templateUrl ? attr.templateUrl : 'partials/viewer.html'
+      scope: {
+        src: '@',
+        page: '=?',
+        total: '=?',
+        scale: '=?',
+        rotate: '=?',
+        error: '=?',
+        pdfDoc: '=?',
+        rendering: '=?',
+        rendered: '=?',
       },
+      template: '<canvas style="display: block;"></canvas>',
       link: function(scope, element, attrs) {
-        var url = scope.pdfUrl,
-          pdfDoc = null,
-          pageNum = (attrs.page ? attrs.page : 1),
-          scale = attrs.scale > 0 ? attrs.scale : 1,
-          canvas = (attrs.canvasid ? document.getElementById(attrs.canvasid) : document.getElementById('pdf-canvas')),
-          ctx = canvas.getContext('2d'),
-          windowEl = angular.element($window);
-
-        windowEl.on('scroll', function() {
-          scope.$apply(function() {
-            scope.scroll = windowEl[0].scrollY;
-          });
-        });
+        var canvas = element[0].getElementsByTagName('canvas')[0];
+        var ctx = canvas.getContext('2d');
+        var pdfDoc;
+        var currentPage;
 
         PDFJS.disableWorker = true;
-        scope.pageNum = pageNum;
 
-        scope.renderPage = function(num) {
-          pdfDoc.getPage(num).then(function(page) {
-            var viewport,
-              bbox,
-              pageWidthScale,
-              pageHeightScale,
-              renderContext = {},
-              pageRendering;
-
-            if (attrs.scale === 'page-fit') {
-              viewport = page.getViewport(1);
-              bbox = element[0].getBoundingClientRect();
-              scale = bbox.width / viewport.width;
+        var getDoc = function() {
+          PDFJS.getDocument(scope.src, null, null, scope.onProgress).then(function(_pdfDoc) {
+            if (typeof scope.onLoad === 'function') {
+              scope.onLoad();
             }
-            viewport = page.getViewport(scale)
+
+            pdfDoc = _pdfDoc;
+            scope.$apply(function() {
+              scope.pdfDoc = _pdfDoc;
+              scope.total = _pdfDoc.numPages;
+            });
+
+            scope.render();
+
+          }, function(error) {
+            if (error) {
+              scope.$apply(function() {
+                scope.error = error;
+              });
+            }
+          });
+        };
+        scope.$watch('src', getDoc);
+
+        scope.rendering = false;
+        scope.render = function() {
+          if(!pdfDoc || scope.rendering) return;
+          var pageCount = pdfDoc.numPages;
+
+          // Changing page will rerender, so just return
+          if(!(scope.page > 0)) {
+            scope.page = 1;
+            return;
+          } else if(scope.page > pageCount) {
+            scope.page = pageCount;
+            return;
+          } else if(currentPage === scope.page) {
+            return;
+          }
+          scope.rendering = true;
+          currentPage = scope.page;
+
+          pdfDoc.getPage(scope.page).then(function(page) {
+            var scale = scope.scale;
+            if(attrs.fitWidth != null){
+              var bbox = element[0].getBoundingClientRect();
+              scale = bbox.width / page.getViewport(1).width;
+            } else if(!scope.scale) {
+              scale = 1;
+            }
+            if(scale != scope.scale) scope.$apply(function() { scope.scale = scale; });
+
+            var viewport = page.getViewport(scale)
 
             canvas.height = viewport.height;
             canvas.width = viewport.width;
 
-            renderContext = {
+            var renderContext = {
               canvasContext: ctx,
               viewport: viewport
             };
 
             page.render(renderContext).promise.then(function() {
-              if (typeof scope.onPageRender === 'function' ) {
-                scope.onPageRender();
-              }
+              scope.rendering = false;
+              scope.rendered = true;
             });
           });
         };
 
-        scope.goPrevious = function() {
-          if (scope.pageToDisplay <= 1) {
-            return;
-          }
-          scope.pageNum = parseInt(scope.pageNum) - 1;
-        };
-
-        scope.goNext = function() {
-          if (scope.pageToDisplay >= pdfDoc.numPages) {
-            return;
-          }
-          scope.pageNum = parseInt(scope.pageNum) + 1;
-        };
-
-        scope.zoomIn = function() {
-          scale = parseFloat(scale) + 0.2;
-          scope.renderPage(scope.pageToDisplay);
-          return scale;
-        };
-
-        scope.zoomOut = function() {
-          scale = parseFloat(scale) - 0.2;
-          scope.renderPage(scope.pageToDisplay);
-          return scale;
-        };
-
-        scope.changePage = function() {
-          scope.renderPage(scope.pageToDisplay);
-        };
-
-        scope.rotate = function() {
-          if (canvas.getAttribute('class') === 'rotate0') {
-            canvas.setAttribute('class', 'rotate90');
-          } else if (canvas.getAttribute('class') === 'rotate90') {
-            canvas.setAttribute('class', 'rotate180');
-          } else if (canvas.getAttribute('class') === 'rotate180') {
-            canvas.setAttribute('class', 'rotate270');
-          } else {
+        var setRotate = function() {
+          var rotate = scope.rotate == null ? 0 : Number.parseInt(scope.rotate);
+          if (rotate === 0) {
             canvas.setAttribute('class', 'rotate0');
+          } else if (rotate === 90) {
+            canvas.setAttribute('class', 'rotate90');
+          } else if (rotate === 180) {
+            canvas.setAttribute('class', 'rotate180');
+          } else if (rotate === 270) {
+            canvas.setAttribute('class', 'rotate270');
           }
         };
+        getDoc();
+        //setRotate();
 
-        PDFJS.getDocument(url, null, null, scope.onProgress).then(
-          function(_pdfDoc) {
-            if (typeof scope.onLoad === 'function' ) {
-              scope.onLoad();
-            }
-
-            pdfDoc = _pdfDoc;
-            scope.renderPage(scope.pageToDisplay);
-
-            scope.$apply(function() {
-              scope.pageCount = _pdfDoc.numPages;
-            });
-          }, function(error) {
-            if (error) {
-              if (typeof scope.onError === 'function') {
-                scope.onError(error);
-              }
-            }
-          }
-        );
-
-        scope.$watch('pageNum', function(newVal) {
-          scope.pageToDisplay = parseInt(newVal);
-          if (pdfDoc !== null) {
-            scope.renderPage(scope.pageToDisplay);
-          }
-        });
-
+        scope.$watch('page', scope.render);
+        scope.$watch('scale', scope.render);
+        scope.$watch('rotate', setRotate);
       }
     };
-  } ]);
+  }]);
 
 })();
