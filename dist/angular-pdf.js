@@ -1,4 +1,4 @@
-/*! Angular-PDF Version: 0.5.0 | (C) Sayanee Basu 2014, released under an MIT license */
+/*! Angular-PDF Version: 0.5.1 | (C) Sayanee Basu 2014, Matt Edlefsen 2015 released under an MIT license */
 (function() {
 
   'use strict';
@@ -25,6 +25,7 @@
         var currentPage;
 
         PDFJS.disableWorker = true;
+        PDFJS.disableRange = true;
 
         var getDoc = function() {
           PDFJS.getDocument(scope.src, null, null, scope.onProgress).then(function(_pdfDoc) {
@@ -71,7 +72,7 @@
           pdfDoc.getPage(scope.page).then(function(page) {
             var scale = scope.scale;
             if(attrs.fitWidth != null){
-              var bbox = element[0].getBoundingClientRect();
+              var bbox = element[0].parentNode.getBoundingClientRect();
               scale = bbox.width / page.getViewport(1).width;
             } else if(!scope.scale) {
               scale = 1;
